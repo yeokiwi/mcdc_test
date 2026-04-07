@@ -1,4 +1,4 @@
-using McdcTool.Parsing;
+using McdcTool.Core.Parsing;
 
 namespace McdcTool.Tests;
 

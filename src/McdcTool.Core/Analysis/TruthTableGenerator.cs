@@ -1,6 +1,6 @@
-using McdcTool.Models;
+using McdcTool.Core.Models;
 
-namespace McdcTool.Analysis;
+namespace McdcTool.Core.Analysis;
 
 public class TruthTableGenerator
 {

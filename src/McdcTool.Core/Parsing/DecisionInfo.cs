@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace McdcTool.Parsing;
+namespace McdcTool.Core.Parsing;
 
 public class DecisionInfo
 {

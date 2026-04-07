@@ -1,8 +1,8 @@
 using System.CommandLine;
-using McdcTool.Analysis;
-using McdcTool.CodeGen;
-using McdcTool.Models;
-using McdcTool.Parsing;
+using McdcTool.Core.Analysis;
+using McdcTool.Core.CodeGen;
+using McdcTool.Core.Models;
+using McdcTool.Core.Parsing;
 
 var pathArgument = new Argument<string>(
     name: "path",

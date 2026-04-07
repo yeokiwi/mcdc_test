@@ -1,0 +1,252 @@
+@page "/"
+@using McdcTool.Core.Parsing
+@using McdcTool.Web.Services
+@inject McdcAnalysisService AnalysisService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>MC/DC Tool - File Selection</PageTitle>
+
+<h3>Select Files for MC/DC Analysis</h3>
+
+<div class="row mb-3">
+    <div class="col-md-8">
+        <label class="form-label fw-bold">Enter path to a .sln, .csproj, .cs file, or directory:</label>
+        <div class="input-group">
+            <input type="text" class="form-control" @bind="inputPath" @bind:event="oninput"
+                   placeholder="/path/to/project.sln or /path/to/source/" />
+            <button class="btn btn-primary" @onclick="LoadPath" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-1"></span>
+                }
+                Load
+            </button>
+        </div>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger mt-2 py-1">@errorMessage</div>
+        }
+    </div>
+</div>
+
+@if (solutionInfo != null)
+{
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Solution: @solutionInfo.Name</strong>
+            <div>
+                <button class="btn btn-sm btn-outline-secondary me-1" @onclick="SelectAll">Select All</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="DeselectAll">Deselect All</button>
+            </div>
+        </div>
+        <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+            @foreach (var project in solutionInfo.Projects)
+            {
+                <div class="mb-2">
+                    <div class="fw-bold">
+                        <input type="checkbox" class="form-check-input me-1"
+                               checked="@IsProjectFullySelected(project)"
+                               @onchange="e => ToggleProject(project, (bool)e.Value!)" />
+                        @project.Name (@project.CSharpFiles.Count files)
+                    </div>
+                    <div class="ms-4">
+                        @foreach (var file in project.CSharpFiles)
+                        {
+                            <div>
+                                <input type="checkbox" class="form-check-input me-1"
+                                       checked="@selectedFiles.Contains(file)"
+                                       @onchange="e => ToggleFile(file, (bool)e.Value!)" />
+                                <span class="text-muted small">@GetRelativePath(file)</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+else if (fileList.Count > 0)
+{
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>C# Files Found: @fileList.Count</strong>
+            <div>
+                <button class="btn btn-sm btn-outline-secondary me-1" @onclick="SelectAll">Select All</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="DeselectAll">Deselect All</button>
+            </div>
+        </div>
+        <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+            @foreach (var file in fileList)
+            {
+                <div>
+                    <input type="checkbox" class="form-check-input me-1"
+                           checked="@selectedFiles.Contains(file)"
+                           @onchange="e => ToggleFile(file, (bool)e.Value!)" />
+                    <span class="small">@GetRelativePath(file)</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (selectedFiles.Count > 0)
+{
+    <button class="btn btn-success btn-lg" @onclick="RunAnalysis" disabled="@isAnalyzing">
+        @if (isAnalyzing)
+        {
+            <span class="spinner-border spinner-border-sm me-1"></span>
+            <span>Analyzing...</span>
+        }
+        else
+        {
+            <span>Analyze @selectedFiles.Count Selected File(s)</span>
+        }
+    </button>
+}
+
+@code {
+    private string inputPath = "";
+    private string errorMessage = "";
+    private bool isLoading;
+    private bool isAnalyzing;
+
+    private SolutionInfo? solutionInfo;
+    private List<string> fileList = new();
+    private HashSet<string> selectedFiles = new();
+
+    // Store results in a static so Results page can access them
+    internal static List<AnalysisResult>? LastResults;
+    internal static string? BasePath;
+
+    private void LoadPath()
+    {
+        errorMessage = "";
+        solutionInfo = null;
+        fileList.Clear();
+        selectedFiles.Clear();
+        isLoading = true;
+
+        try
+        {
+            var path = inputPath.Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                errorMessage = "Please enter a path.";
+                return;
+            }
+
+            if (!Path.Exists(path) && !File.Exists(path))
+            {
+                errorMessage = $"Path not found: {path}";
+                return;
+            }
+
+            BasePath = path;
+
+            if (path.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+            {
+                solutionInfo = AnalysisService.LoadSolution(path);
+                if (solutionInfo == null || solutionInfo.Projects.Count == 0)
+                {
+                    errorMessage = "No C# projects found in the solution.";
+                    return;
+                }
+                // Auto-select all files
+                foreach (var project in solutionInfo.Projects)
+                    foreach (var file in project.CSharpFiles)
+                        selectedFiles.Add(file);
+            }
+            else
+            {
+                fileList = AnalysisService.DiscoverFiles(path);
+                if (fileList.Count == 0)
+                {
+                    errorMessage = "No .cs files found at the specified path.";
+                    return;
+                }
+                // Auto-select all files
+                foreach (var file in fileList)
+                    selectedFiles.Add(file);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ToggleFile(string file, bool selected)
+    {
+        if (selected) selectedFiles.Add(file);
+        else selectedFiles.Remove(file);
+    }
+
+    private void ToggleProject(ProjectFileInfo project, bool selected)
+    {
+        foreach (var file in project.CSharpFiles)
+        {
+            if (selected) selectedFiles.Add(file);
+            else selectedFiles.Remove(file);
+        }
+    }
+
+    private bool IsProjectFullySelected(ProjectFileInfo project)
+    {
+        return project.CSharpFiles.All(f => selectedFiles.Contains(f));
+    }
+
+    private void SelectAll()
+    {
+        if (solutionInfo != null)
+            foreach (var p in solutionInfo.Projects)
+                foreach (var f in p.CSharpFiles)
+                    selectedFiles.Add(f);
+        else
+            foreach (var f in fileList)
+                selectedFiles.Add(f);
+    }
+
+    private void DeselectAll()
+    {
+        selectedFiles.Clear();
+    }
+
+    private async Task RunAnalysis()
+    {
+        isAnalyzing = true;
+        StateHasChanged();
+
+        // Run analysis on a background thread to avoid blocking the UI
+        await Task.Run(() =>
+        {
+            LastResults = AnalysisService.AnalyzeFiles(selectedFiles.ToList());
+        });
+
+        isAnalyzing = false;
+
+        if (LastResults != null && LastResults.Count > 0)
+        {
+            Navigation.NavigateTo("/results");
+        }
+        else
+        {
+            errorMessage = "No compound boolean decisions found in the selected files.";
+        }
+    }
+
+    private string GetRelativePath(string fullPath)
+    {
+        if (string.IsNullOrEmpty(BasePath)) return fullPath;
+        try
+        {
+            var baseDir = Directory.Exists(BasePath) ? BasePath : Path.GetDirectoryName(BasePath)!;
+            return Path.GetRelativePath(baseDir, fullPath);
+        }
+        catch { return fullPath; }
+    }
+}

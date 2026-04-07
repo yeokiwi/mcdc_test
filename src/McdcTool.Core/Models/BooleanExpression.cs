@@ -1,4 +1,4 @@
-namespace McdcTool.Models;
+namespace McdcTool.Core.Models;
 
 public abstract class BooleanExpression
 {

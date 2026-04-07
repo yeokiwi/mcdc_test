@@ -1,5 +1,5 @@
-using McdcTool.Analysis;
-using McdcTool.Models;
+using McdcTool.Core.Analysis;
+using McdcTool.Core.Models;
 
 namespace McdcTool.Tests;
 

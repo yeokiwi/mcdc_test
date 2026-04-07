@@ -1,9 +1,9 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using McdcTool.Models;
+using McdcTool.Core.Models;
 
-namespace McdcTool.Analysis;
+namespace McdcTool.Core.Analysis;
 
 public class ExpressionParser
 {

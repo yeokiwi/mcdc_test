@@ -1,8 +1,8 @@
 using System.Text;
-using McdcTool.Models;
-using McdcTool.Parsing;
+using McdcTool.Core.Models;
+using McdcTool.Core.Parsing;
 
-namespace McdcTool.CodeGen;
+namespace McdcTool.Core.CodeGen;
 
 public class XUnitTestGenerator
 {
