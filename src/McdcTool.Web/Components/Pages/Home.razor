@@ -1,4 +1,5 @@
 @page "/"
+@using McdcTool.Core.Models
 @using McdcTool.Core.Parsing
 @using McdcTool.Web.Services
 @inject McdcAnalysisService AnalysisService
@@ -117,6 +118,8 @@ else if (fileList.Count > 0)
 
     // Store results in a static so Results page can access them
     internal static List<AnalysisResult>? LastResults;
+    internal static CoverageReport? LastCoverageReport;
+    internal static List<string>? LastAnalyzedFiles;
     internal static string? BasePath;
 
     private void LoadPath()
@@ -222,9 +225,14 @@ else if (fileList.Count > 0)
         StateHasChanged();
 
         // Run analysis on a background thread to avoid blocking the UI
+        var fileList = selectedFiles.ToList();
         await Task.Run(() =>
         {
-            LastResults = AnalysisService.AnalyzeFiles(selectedFiles.ToList());
+            LastResults = AnalysisService.AnalyzeFiles(fileList);
+            LastAnalyzedFiles = fileList;
+            LastCoverageReport = LastResults.Count > 0
+                ? AnalysisService.ComputeCoverage(fileList, LastResults)
+                : null;
         });
 
         isAnalyzing = false;

@@ -1,5 +1,6 @@
 using McdcTool.Core.Analysis;
 using McdcTool.Core.CodeGen;
+using McdcTool.Core.Coverage;
 using McdcTool.Core.Models;
 using McdcTool.Core.Parsing;
 
@@ -10,6 +11,7 @@ public class AnalysisResult
     public DecisionInfo Decision { get; set; } = null!;
     public McdcResult Result { get; set; } = null!;
     public string TestCode { get; set; } = "";
+    public bool IsDecisionCovered { get; set; }
 }
 
 public class McdcAnalysisService
@@ -54,17 +56,40 @@ public class McdcAnalysisService
                 var (expression, conditions) = parser.Parse(decision.ExpressionSyntax);
                 var mcdcResult = analyzer.Analyze(expression, conditions, decision.ExpressionText);
                 var testCode = testGenerator.Generate(decision, mcdcResult);
+                bool covered = mcdcResult.MinimalTestSet.Any(tc => tc.Row.DecisionOutcome)
+                    && mcdcResult.MinimalTestSet.Any(tc => !tc.Row.DecisionOutcome);
 
                 results.Add(new AnalysisResult
                 {
                     Decision = decision,
                     Result = mcdcResult,
-                    TestCode = testCode
+                    TestCode = testCode,
+                    IsDecisionCovered = covered
                 });
             }
         }
 
         return results;
+    }
+
+    public CoverageReport ComputeCoverage(List<string> filePaths, List<AnalysisResult> results)
+    {
+        var coverageItems = results.Select(r => new AnalysisResultCoverage
+        {
+            Decision = r.Decision,
+            McResult = r.Result,
+            IsDecisionCovered = r.IsDecisionCovered
+        }).ToList();
+
+        return new CoverageAnalyzer().Analyze(filePaths, coverageItems);
+    }
+
+    public void GenerateTestProject(List<string> sourceFiles, List<AnalysisResult> results, string outputDir)
+    {
+        var items = results
+            .Select(r => (r.Decision, r.Result))
+            .ToList();
+        new TestProjectGenerator().GenerateProject(sourceFiles, items, outputDir);
     }
 
     public void ExportTestFiles(List<AnalysisResult> results, string outputDir)

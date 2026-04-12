@@ -20,6 +20,7 @@
     <h3>MC/DC Analysis Results</h3>
     <div>
         <button class="btn btn-outline-primary me-2" @onclick="GoBack">Back to File Selection</button>
+        <button class="btn btn-outline-success me-2" @onclick="ShowProjectDialog">Generate Test Project</button>
         <button class="btn btn-primary" @onclick="ShowExportDialog">Export All Tests</button>
     </div>
 </div>
@@ -30,11 +31,99 @@
     Total test cases generated: <strong>@results.Sum(r => r.Result.MinimalTestSet.Count)</strong>
 </div>
 
+<!-- Coverage Summary -->
+@if (coverageReport != null)
+{
+    <div class="card mb-3 border-secondary">
+        <div class="card-header d-flex justify-content-between align-items-center"
+             style="cursor: pointer" @onclick="() => showCoverageDetails = !showCoverageDetails">
+            <strong>Coverage Summary (Static Estimate)</strong>
+            <span>@(showCoverageDetails ? "\u25B2" : "\u25BC")</span>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><strong>Statement Coverage</strong></span>
+                        <span>@coverageReport.CoveredStatements / @coverageReport.TotalStatements
+                            (@coverageReport.StatementCoveragePercent.ToString("F1")%)</span>
+                    </div>
+                    <div class="progress" style="height: 22px;">
+                        <div class="progress-bar @StatementProgressClass(coverageReport.StatementCoveragePercent)"
+                             role="progressbar"
+                             style="width: @coverageReport.StatementCoveragePercent.ToString("F1")%"
+                             aria-valuenow="@coverageReport.StatementCoveragePercent"
+                             aria-valuemin="0" aria-valuemax="100">
+                            @coverageReport.StatementCoveragePercent.ToString("F1")%
+                        </div>
+                    </div>
+                    <small class="text-muted">Statements in methods containing analyzed decisions</small>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><strong>Decision Coverage</strong></span>
+                        <span>@coverageReport.CoveredDecisions / @coverageReport.TotalDecisions
+                            (@coverageReport.DecisionCoveragePercent.ToString("F1")%)</span>
+                    </div>
+                    <div class="progress" style="height: 22px;">
+                        <div class="progress-bar @DecisionProgressClass(coverageReport.DecisionCoveragePercent)"
+                             role="progressbar"
+                             style="width: @coverageReport.DecisionCoveragePercent.ToString("F1")%"
+                             aria-valuenow="@coverageReport.DecisionCoveragePercent"
+                             aria-valuemin="0" aria-valuemax="100">
+                            @coverageReport.DecisionCoveragePercent.ToString("F1")%
+                        </div>
+                    </div>
+                    <small class="text-muted">Decisions where test set covers both T and F outcomes</small>
+                </div>
+            </div>
+
+            @if (showCoverageDetails && coverageReport.Files.Count > 1)
+            {
+                <hr />
+                <h6 class="mt-2">Per-File Breakdown</h6>
+                <table class="table table-sm table-bordered" style="width: auto">
+                    <thead class="table-light">
+                        <tr>
+                            <th>File</th>
+                            <th class="text-center">Statements</th>
+                            <th class="text-center">Stmt %</th>
+                            <th class="text-center">Decisions</th>
+                            <th class="text-center">Decision %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var fc in coverageReport.Files)
+                        {
+                            <tr>
+                                <td><small>@Path.GetFileName(fc.FilePath)</small></td>
+                                <td class="text-center">@fc.CoveredStatements / @fc.TotalStatements</td>
+                                <td class="text-center">
+                                    <span class="badge @BadgeClass(fc.StatementCoveragePercent)">
+                                        @fc.StatementCoveragePercent.ToString("F1")%
+                                    </span>
+                                </td>
+                                <td class="text-center">@fc.CoveredDecisions / @fc.TotalDecisions</td>
+                                <td class="text-center">
+                                    <span class="badge @BadgeClass(fc.DecisionCoveragePercent)">
+                                        @fc.DecisionCoveragePercent.ToString("F1")%
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+<!-- Export dialog -->
 @if (showExportDialog)
 {
     <div class="card mb-3 border-primary">
         <div class="card-body">
-            <label class="form-label fw-bold">Export directory:</label>
+            <label class="form-label fw-bold">Export test files to directory:</label>
             <div class="input-group">
                 <input type="text" class="form-control" @bind="exportPath" placeholder="./McdcTests" />
                 <button class="btn btn-primary" @onclick="ExportAll">Export</button>
@@ -43,6 +132,31 @@
             @if (!string.IsNullOrEmpty(exportMessage))
             {
                 <div class="alert @(exportSuccess ? "alert-success" : "alert-danger") mt-2 py-1">@exportMessage</div>
+            }
+        </div>
+    </div>
+}
+
+<!-- Generate Test Project dialog -->
+@if (showProjectDialog)
+{
+    <div class="card mb-3 border-success">
+        <div class="card-body">
+            <label class="form-label fw-bold">Generate runnable test project to directory:</label>
+            <div class="input-group">
+                <input type="text" class="form-control" @bind="projectPath" placeholder="./McdcTestProject" />
+                <button class="btn btn-success" @onclick="GenerateProject">Generate</button>
+                <button class="btn btn-outline-secondary" @onclick="() => showProjectDialog = false">Cancel</button>
+            </div>
+            @if (!string.IsNullOrEmpty(projectMessage))
+            {
+                <div class="alert @(projectSuccess ? "alert-success" : "alert-danger") mt-2 py-1">
+                    @projectMessage
+                    @if (projectSuccess)
+                    {
+                        <br /><small>Run: <code>cd @Path.GetFullPath(projectPath) && dotnet test</code></small>
+                    }
+                </div>
             }
         </div>
     </div>
@@ -63,9 +177,17 @@
                     <code class="ms-2">@result.ExpressionText</code>
                 </div>
                 <div>
-                    <span class="badge bg-info">@result.ConditionMappings.Count conditions</span>
-                    <span class="badge bg-success">@result.MinimalTestSet.Count tests</span>
-                    <span class="ms-2">@(isExpanded ? "\u25B2" : "\u25BC")</span>
+                    <span class="badge bg-info me-1">@result.ConditionMappings.Count conditions</span>
+                    <span class="badge bg-success me-1">@result.MinimalTestSet.Count tests</span>
+                    @if (analysis.IsDecisionCovered)
+                    {
+                        <span class="badge bg-success me-1" title="Both true and false outcomes covered">Decision ✓</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-warning text-dark me-1" title="Only one decision outcome covered">Decision !</span>
+                    }
+                    <span class="ms-1">@(isExpanded ? "\u25B2" : "\u25BC")</span>
                 </div>
             </div>
         </div>
@@ -206,15 +328,24 @@
 
 @code {
     private List<AnalysisResult>? results;
+    private CoverageReport? coverageReport;
     private HashSet<int> expandedCards = new();
+    private bool showCoverageDetails;
+
     private bool showExportDialog;
     private string exportPath = "./McdcTests";
     private string exportMessage = "";
     private bool exportSuccess;
 
+    private bool showProjectDialog;
+    private string projectPath = "./McdcTestProject";
+    private string projectMessage = "";
+    private bool projectSuccess;
+
     protected override void OnInitialized()
     {
         results = Home.LastResults;
+        coverageReport = Home.LastCoverageReport;
         // Auto-expand the first card
         if (results != null && results.Count > 0)
             expandedCards.Add(0);
@@ -254,6 +385,30 @@
         }
     }
 
+    private void ShowProjectDialog()
+    {
+        showProjectDialog = true;
+        projectMessage = "";
+    }
+
+    private void GenerateProject()
+    {
+        if (results == null) return;
+
+        try
+        {
+            var sourceFiles = Home.LastAnalyzedFiles ?? results.Select(r => r.Decision.FilePath).Distinct().ToList();
+            AnalysisService.GenerateTestProject(sourceFiles, results, projectPath);
+            projectSuccess = true;
+            projectMessage = $"Test project generated at: {Path.GetFullPath(projectPath)}";
+        }
+        catch (Exception ex)
+        {
+            projectSuccess = false;
+            projectMessage = $"Generation failed: {ex.Message}";
+        }
+    }
+
     private async Task CopyToClipboard(string text)
     {
         try
@@ -265,4 +420,13 @@
             // Clipboard API may not be available in all contexts
         }
     }
+
+    private static string StatementProgressClass(double pct) =>
+        pct >= 80 ? "bg-success" : pct >= 50 ? "bg-warning" : "bg-danger";
+
+    private static string DecisionProgressClass(double pct) =>
+        pct >= 100 ? "bg-success" : pct >= 75 ? "bg-warning" : "bg-danger";
+
+    private static string BadgeClass(double pct) =>
+        pct >= 80 ? "bg-success" : pct >= 50 ? "bg-warning text-dark" : "bg-danger";
 }
