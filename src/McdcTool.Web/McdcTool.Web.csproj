@@ -10,4 +10,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- Exclude generated test project output directories from compilation -->
+  <ItemGroup>
+    <Compile Remove="McdcTestProject\**" />
+    <Compile Remove="McdcTests\**" />
+    <Content Remove="McdcTestProject\**" />
+    <Content Remove="McdcTests\**" />
+    <None Remove="McdcTestProject\**" />
+    <None Remove="McdcTests\**" />
+  </ItemGroup>
+
 </Project>
