@@ -205,6 +205,7 @@ public class TestProjectGeneratorTests
 
             var csproj = File.ReadAllText(Path.Combine(outputDir, "McdcTests.csproj"));
             Assert.Contains("<UseWindowsForms>true</UseWindowsForms>", csproj);
+            Assert.Contains("net10.0-windows", csproj);
         }
         finally
         {
@@ -233,6 +234,7 @@ public class TestProjectGeneratorTests
 
             var csproj = File.ReadAllText(Path.Combine(outputDir, "McdcTests.csproj"));
             Assert.Contains("<UseWPF>true</UseWPF>", csproj);
+            Assert.Contains("net10.0-windows", csproj);
         }
         finally
         {

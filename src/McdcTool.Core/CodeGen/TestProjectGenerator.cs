@@ -105,11 +105,13 @@ public class TestProjectGenerator
 "
             : "";
 
+        var targetFramework = (needsWinForms || needsWpf) ? "net10.0-windows" : "net10.0";
+
         return $@"<Project Sdk=""Microsoft.NET.Sdk"">
 
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>{targetFramework}</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsTestProject>true</IsTestProject>
