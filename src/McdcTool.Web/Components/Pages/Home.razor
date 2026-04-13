@@ -8,7 +8,7 @@
 
 <PageTitle>MC/DC Tool - File Selection</PageTitle>
 
-<h3>Select Files for MC/DC Analysis</h3>
+<h3>Select Files for Coverage Analysis</h3>
 
 <div class="row mb-3">
     <div class="col-md-8">
@@ -93,7 +93,36 @@ else if (fileList.Count > 0)
 
 @if (selectedFiles.Count > 0)
 {
-    <button class="btn btn-success btn-lg" @onclick="RunAnalysis" disabled="@isAnalyzing">
+    <div class="card mb-3">
+        <div class="card-header"><strong>Coverage Types</strong></div>
+        <div class="card-body py-2">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="chkStatement"
+                       checked="@coverageOptions.StatementCoverage"
+                       @onchange="e => coverageOptions.StatementCoverage = (bool)e.Value!" />
+                <label class="form-check-label" for="chkStatement">Statement Coverage</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="chkDecision"
+                       checked="@coverageOptions.DecisionCoverage"
+                       @onchange="e => coverageOptions.DecisionCoverage = (bool)e.Value!" />
+                <label class="form-check-label" for="chkDecision">Decision Coverage</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="chkMcdc"
+                       checked="@coverageOptions.McdcCoverage"
+                       @onchange="e => coverageOptions.McdcCoverage = (bool)e.Value!" />
+                <label class="form-check-label" for="chkMcdc">MC/DC</label>
+            </div>
+            @if (!coverageOptions.StatementCoverage && !coverageOptions.DecisionCoverage && !coverageOptions.McdcCoverage)
+            {
+                <div class="text-danger small mt-1">Please select at least one coverage type.</div>
+            }
+        </div>
+    </div>
+
+    <button class="btn btn-success btn-lg" @onclick="RunAnalysis"
+            disabled="@(isAnalyzing || (!coverageOptions.StatementCoverage && !coverageOptions.DecisionCoverage && !coverageOptions.McdcCoverage))">
         @if (isAnalyzing)
         {
             <span class="spinner-border spinner-border-sm me-1"></span>
@@ -115,10 +144,12 @@ else if (fileList.Count > 0)
     private SolutionInfo? solutionInfo;
     private List<string> fileList = new();
     private HashSet<string> selectedFiles = new();
+    private CoverageOptions coverageOptions = new() { StatementCoverage = true, DecisionCoverage = true, McdcCoverage = true };
 
     // Store results in a static so Results page can access them
     internal static List<AnalysisResult>? LastResults;
     internal static CoverageReport? LastCoverageReport;
+    internal static CoverageOptions? LastCoverageOptions;
     internal static List<string>? LastAnalyzedFiles;
     internal static string? BasePath;
 
@@ -224,20 +255,30 @@ else if (fileList.Count > 0)
         isAnalyzing = true;
         StateHasChanged();
 
+        var opts = new CoverageOptions
+        {
+            StatementCoverage = coverageOptions.StatementCoverage,
+            DecisionCoverage = coverageOptions.DecisionCoverage,
+            McdcCoverage = coverageOptions.McdcCoverage
+        };
+
         // Run analysis on a background thread to avoid blocking the UI
-        var fileList = selectedFiles.ToList();
+        var files = selectedFiles.ToList();
         await Task.Run(() =>
         {
-            LastResults = AnalysisService.AnalyzeFiles(fileList);
-            LastAnalyzedFiles = fileList;
-            LastCoverageReport = LastResults.Count > 0
-                ? AnalysisService.ComputeCoverage(fileList, LastResults)
-                : null;
+            LastResults = opts.AnyDecisionLevel
+                ? AnalysisService.AnalyzeFiles(files)
+                : new List<AnalysisResult>();
+            LastAnalyzedFiles = files;
+            LastCoverageOptions = opts;
+            LastCoverageReport = AnalysisService.ComputeCoverage(files, LastResults);
         });
 
         isAnalyzing = false;
 
-        if (LastResults != null && LastResults.Count > 0)
+        // Navigate if we have decisions or if statement-only coverage was requested
+        if ((LastResults != null && LastResults.Count > 0) ||
+            (opts.StatementCoverage && LastCoverageReport != null && LastCoverageReport.TotalStatements > 0))
         {
             Navigation.NavigateTo("/results");
         }

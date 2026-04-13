@@ -6,9 +6,9 @@
 @inject IJSRuntime JS
 @rendermode InteractiveServer
 
-<PageTitle>MC/DC Analysis Results</PageTitle>
+<PageTitle>Coverage Analysis Results</PageTitle>
 
-@if (results == null || results.Count == 0)
+@if (coverageReport == null && (results == null || results.Count == 0))
 {
     <div class="alert alert-warning">
         No analysis results available. <a href="/">Go back to file selection</a>.
@@ -17,22 +17,47 @@
 }
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h3>MC/DC Analysis Results</h3>
+    <h3>Coverage Analysis Results</h3>
     <div>
         <button class="btn btn-outline-primary me-2" @onclick="GoBack">Back to File Selection</button>
-        <button class="btn btn-outline-success me-2" @onclick="ShowProjectDialog">Generate Test Project</button>
-        <button class="btn btn-primary" @onclick="ShowExportDialog">Export All Tests</button>
+        @if (options.McdcCoverage)
+        {
+            <button class="btn btn-outline-success me-2" @onclick="ShowProjectDialog">Generate Test Project</button>
+            <button class="btn btn-primary" @onclick="ShowExportDialog">Export All Tests</button>
+        }
     </div>
 </div>
 
-<div class="alert alert-info py-2">
-    Found <strong>@results.Count</strong> decision(s) across
-    <strong>@results.Select(r => r.Decision.FilePath).Distinct().Count()</strong> file(s).
-    Total test cases generated: <strong>@results.Sum(r => r.Result.MinimalTestSet.Count)</strong>
+<!-- Active coverage types -->
+<div class="mb-3">
+    @if (options.StatementCoverage)
+    {
+        <span class="badge bg-primary me-1">Statement Coverage</span>
+    }
+    @if (options.DecisionCoverage)
+    {
+        <span class="badge bg-primary me-1">Decision Coverage</span>
+    }
+    @if (options.McdcCoverage)
+    {
+        <span class="badge bg-primary me-1">MC/DC</span>
+    }
 </div>
 
+@if (results != null && results.Count > 0)
+{
+    <div class="alert alert-info py-2">
+        Found <strong>@results.Count</strong> decision(s) across
+        <strong>@results.Select(r => r.Decision.FilePath).Distinct().Count()</strong> file(s).
+        @if (options.McdcCoverage)
+        {
+            <span>Total test cases generated: <strong>@results.Sum(r => r.Result.MinimalTestSet.Count)</strong></span>
+        }
+    </div>
+}
+
 <!-- Coverage Summary -->
-@if (coverageReport != null)
+@if (coverageReport != null && (options.StatementCoverage || options.DecisionCoverage))
 {
     <div class="card mb-3 border-secondary">
         <div class="card-header d-flex justify-content-between align-items-center"
@@ -42,43 +67,49 @@
         </div>
         <div class="card-body">
             <div class="row g-3">
-                <div class="col-md-6">
-                    <div class="d-flex justify-content-between mb-1">
-                        <span><strong>Statement Coverage</strong></span>
-                        <span>@coverageReport.CoveredStatements / @coverageReport.TotalStatements
-                            (@coverageReport.StatementCoveragePercent.ToString("F1")%)</span>
-                    </div>
-                    <div class="progress" style="height: 22px;">
-                        <div class="progress-bar @StatementProgressClass(coverageReport.StatementCoveragePercent)"
-                             role="progressbar"
-                             style="width: @coverageReport.StatementCoveragePercent.ToString("F1")%"
-                             aria-valuenow="@coverageReport.StatementCoveragePercent"
-                             aria-valuemin="0" aria-valuemax="100">
-                            @coverageReport.StatementCoveragePercent.ToString("F1")%
+                @if (options.StatementCoverage)
+                {
+                    <div class="@(options.DecisionCoverage ? "col-md-6" : "col-12")">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><strong>Statement Coverage</strong></span>
+                            <span>@coverageReport.CoveredStatements / @coverageReport.TotalStatements
+                                (@coverageReport.StatementCoveragePercent.ToString("F1")%)</span>
                         </div>
-                    </div>
-                    <small class="text-muted">Statements in methods containing analyzed decisions</small>
-                </div>
-                <div class="col-md-6">
-                    <div class="d-flex justify-content-between mb-1">
-                        <span><strong>Decision Coverage</strong></span>
-                        <span>@coverageReport.CoveredDecisions / @coverageReport.TotalDecisions
-                            (@coverageReport.DecisionCoveragePercent.ToString("F1")%)</span>
-                    </div>
-                    <div class="progress" style="height: 22px;">
-                        <div class="progress-bar @DecisionProgressClass(coverageReport.DecisionCoveragePercent)"
-                             role="progressbar"
-                             style="width: @coverageReport.DecisionCoveragePercent.ToString("F1")%"
-                             aria-valuenow="@coverageReport.DecisionCoveragePercent"
-                             aria-valuemin="0" aria-valuemax="100">
-                            @coverageReport.DecisionCoveragePercent.ToString("F1")%
+                        <div class="progress" style="height: 22px;">
+                            <div class="progress-bar @ProgressClass(coverageReport.StatementCoveragePercent)"
+                                 role="progressbar"
+                                 style="width: @coverageReport.StatementCoveragePercent.ToString("F1")%"
+                                 aria-valuenow="@coverageReport.StatementCoveragePercent"
+                                 aria-valuemin="0" aria-valuemax="100">
+                                @coverageReport.StatementCoveragePercent.ToString("F1")%
+                            </div>
                         </div>
+                        <small class="text-muted">Statements in methods containing analyzed decisions</small>
                     </div>
-                    <small class="text-muted">Decisions where test set covers both T and F outcomes</small>
-                </div>
+                }
+                @if (options.DecisionCoverage)
+                {
+                    <div class="@(options.StatementCoverage ? "col-md-6" : "col-12")">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span><strong>Decision Coverage</strong></span>
+                            <span>@coverageReport.CoveredDecisions / @coverageReport.TotalDecisions
+                                (@coverageReport.DecisionCoveragePercent.ToString("F1")%)</span>
+                        </div>
+                        <div class="progress" style="height: 22px;">
+                            <div class="progress-bar @ProgressClass(coverageReport.DecisionCoveragePercent)"
+                                 role="progressbar"
+                                 style="width: @coverageReport.DecisionCoveragePercent.ToString("F1")%"
+                                 aria-valuenow="@coverageReport.DecisionCoveragePercent"
+                                 aria-valuemin="0" aria-valuemax="100">
+                                @coverageReport.DecisionCoveragePercent.ToString("F1")%
+                            </div>
+                        </div>
+                        <small class="text-muted">Decisions where test set covers both T and F outcomes</small>
+                    </div>
+                }
             </div>
 
-            @if (showCoverageDetails && coverageReport.Files.Count > 1)
+            @if (showCoverageDetails && coverageReport.Files.Count > 0)
             {
                 <hr />
                 <h6 class="mt-2">Per-File Breakdown</h6>
@@ -86,10 +117,16 @@
                     <thead class="table-light">
                         <tr>
                             <th>File</th>
-                            <th class="text-center">Statements</th>
-                            <th class="text-center">Stmt %</th>
-                            <th class="text-center">Decisions</th>
-                            <th class="text-center">Decision %</th>
+                            @if (options.StatementCoverage)
+                            {
+                                <th class="text-center">Statements</th>
+                                <th class="text-center">Stmt %</th>
+                            }
+                            @if (options.DecisionCoverage)
+                            {
+                                <th class="text-center">Decisions</th>
+                                <th class="text-center">Decision %</th>
+                            }
                         </tr>
                     </thead>
                     <tbody>
@@ -97,18 +134,24 @@
                         {
                             <tr>
                                 <td><small>@Path.GetFileName(fc.FilePath)</small></td>
-                                <td class="text-center">@fc.CoveredStatements / @fc.TotalStatements</td>
-                                <td class="text-center">
-                                    <span class="badge @BadgeClass(fc.StatementCoveragePercent)">
-                                        @fc.StatementCoveragePercent.ToString("F1")%
-                                    </span>
-                                </td>
-                                <td class="text-center">@fc.CoveredDecisions / @fc.TotalDecisions</td>
-                                <td class="text-center">
-                                    <span class="badge @BadgeClass(fc.DecisionCoveragePercent)">
-                                        @fc.DecisionCoveragePercent.ToString("F1")%
-                                    </span>
-                                </td>
+                                @if (options.StatementCoverage)
+                                {
+                                    <td class="text-center">@fc.CoveredStatements / @fc.TotalStatements</td>
+                                    <td class="text-center">
+                                        <span class="badge @BadgeClass(fc.StatementCoveragePercent)">
+                                            @fc.StatementCoveragePercent.ToString("F1")%
+                                        </span>
+                                    </td>
+                                }
+                                @if (options.DecisionCoverage)
+                                {
+                                    <td class="text-center">@fc.CoveredDecisions / @fc.TotalDecisions</td>
+                                    <td class="text-center">
+                                        <span class="badge @BadgeClass(fc.DecisionCoveragePercent)">
+                                            @fc.DecisionCoveragePercent.ToString("F1")%
+                                        </span>
+                                    </td>
+                                }
                             </tr>
                         }
                     </tbody>
@@ -162,173 +205,190 @@
     </div>
 }
 
-@foreach (var (analysis, index) in results.Select((a, i) => (a, i)))
+<!-- Per-decision cards (shown when Decision Coverage or MC/DC is selected) -->
+@if (options.AnyDecisionLevel && results != null && results.Count > 0)
 {
-    var result = analysis.Result;
-    var decision = analysis.Decision;
-    var isExpanded = expandedCards.Contains(index);
+    @foreach (var (analysis, index) in results.Select((a, i) => (a, i)))
+    {
+        var result = analysis.Result;
+        var decision = analysis.Decision;
+        var isExpanded = expandedCards.Contains(index);
 
-    <div class="card mb-3">
-        <div class="card-header" style="cursor: pointer" @onclick="() => ToggleCard(index)">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <span class="badge bg-secondary me-1">@decision.StatementType</span>
-                    <strong>@Path.GetFileName(decision.FilePath):@decision.LineNumber</strong>
-                    <code class="ms-2">@result.ExpressionText</code>
-                </div>
-                <div>
-                    <span class="badge bg-info me-1">@result.ConditionMappings.Count conditions</span>
-                    <span class="badge bg-success me-1">@result.MinimalTestSet.Count tests</span>
-                    @if (analysis.IsDecisionCovered)
-                    {
-                        <span class="badge bg-success me-1" title="Both true and false outcomes covered">Decision ✓</span>
-                    }
-                    else
-                    {
-                        <span class="badge bg-warning text-dark me-1" title="Only one decision outcome covered">Decision !</span>
-                    }
-                    <span class="ms-1">@(isExpanded ? "\u25B2" : "\u25BC")</span>
-                </div>
-            </div>
-        </div>
-
-        @if (isExpanded)
-        {
-            <div class="card-body">
-                <!-- Condition Mappings -->
-                <h6>Condition Mappings</h6>
-                <div class="mb-3">
-                    <table class="table table-sm table-bordered" style="width: auto">
-                        <thead class="table-light">
-                            <tr><th>Label</th><th>Condition</th></tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var (label, text) in result.ConditionMappings.OrderBy(kv => kv.Key))
+        <div class="card mb-3">
+            <div class="card-header" style="cursor: pointer" @onclick="() => ToggleCard(index)">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge bg-secondary me-1">@decision.StatementType</span>
+                        <strong>@Path.GetFileName(decision.FilePath):@decision.LineNumber</strong>
+                        <code class="ms-2">@result.ExpressionText</code>
+                    </div>
+                    <div>
+                        <span class="badge bg-info me-1">@result.ConditionMappings.Count conditions</span>
+                        @if (options.McdcCoverage)
+                        {
+                            <span class="badge bg-success me-1">@result.MinimalTestSet.Count tests</span>
+                        }
+                        @if (options.DecisionCoverage)
+                        {
+                            @if (analysis.IsDecisionCovered)
                             {
-                                <tr><td><strong>@label</strong></td><td><code>@text</code></td></tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Truth Table -->
-                <h6>Truth Table (@result.TruthTable.Rows.Count rows)</h6>
-                <div class="mb-3 table-responsive" style="max-height: 300px; overflow-y: auto;">
-                    <table class="table table-sm table-bordered table-hover" style="width: auto">
-                        <thead class="table-light sticky-top">
-                            <tr>
-                                <th>Row</th>
-                                @foreach (var label in result.TruthTable.ConditionLabels)
-                                {
-                                    <th class="text-center">@label</th>
-                                }
-                                <th class="text-center">Result</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var row in result.TruthTable.Rows)
-                            {
-                                var isTestRow = result.MinimalTestSet.Any(tc => tc.Row.RowIndex == row.RowIndex);
-                                <tr class="@(isTestRow ? "table-warning" : "")">
-                                    <td>@row.RowIndex</td>
-                                    @foreach (var label in result.TruthTable.ConditionLabels)
-                                    {
-                                        <td class="text-center">
-                                            <span class="@(row.ConditionValues[label] ? "text-success fw-bold" : "text-danger")">
-                                                @(row.ConditionValues[label] ? "T" : "F")
-                                            </span>
-                                        </td>
-                                    }
-                                    <td class="text-center">
-                                        <span class="@(row.DecisionOutcome ? "text-success fw-bold" : "text-danger")">
-                                            @(row.DecisionOutcome ? "T" : "F")
-                                        </span>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                    <small class="text-muted">Highlighted rows are selected for the minimal MC/DC test set.</small>
-                </div>
-
-                <!-- Independence Pairs -->
-                <h6>Independence Pairs</h6>
-                <div class="mb-3">
-                    @foreach (var label in result.TruthTable.ConditionLabels)
-                    {
-                        var pairs = result.IndependencePairs[label];
-                        <div class="mb-1">
-                            <strong>@label</strong>: @pairs.Count pair(s)
-                            @if (pairs.Count > 0)
-                            {
-                                <span class="text-muted ms-2">
-                                    @string.Join(", ", pairs.Select(p => $"({p.TrueRow.RowIndex},{p.FalseRow.RowIndex})"))
-                                </span>
+                                <span class="badge bg-success me-1" title="Both true and false outcomes covered">Decision &#x2713;</span>
                             }
                             else
                             {
-                                <span class="text-danger ms-2">No independence pairs found</span>
+                                <span class="badge bg-warning text-dark me-1" title="Only one decision outcome covered">Decision !</span>
                             }
+                        }
+                        <span class="ms-1">@(isExpanded ? "\u25B2" : "\u25BC")</span>
+                    </div>
+                </div>
+            </div>
+
+            @if (isExpanded)
+            {
+                <div class="card-body">
+                    <!-- Condition Mappings -->
+                    <h6>Condition Mappings</h6>
+                    <div class="mb-3">
+                        <table class="table table-sm table-bordered" style="width: auto">
+                            <thead class="table-light">
+                                <tr><th>Label</th><th>Condition</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var (label, text) in result.ConditionMappings.OrderBy(kv => kv.Key))
+                                {
+                                    <tr><td><strong>@label</strong></td><td><code>@text</code></td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Truth Table (shown for Decision Coverage and MC/DC) -->
+                    <h6>Truth Table (@result.TruthTable.Rows.Count rows)</h6>
+                    <div class="mb-3 table-responsive" style="max-height: 300px; overflow-y: auto;">
+                        <table class="table table-sm table-bordered table-hover" style="width: auto">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>Row</th>
+                                    @foreach (var label in result.TruthTable.ConditionLabels)
+                                    {
+                                        <th class="text-center">@label</th>
+                                    }
+                                    <th class="text-center">Result</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in result.TruthTable.Rows)
+                                {
+                                    var isTestRow = options.McdcCoverage && result.MinimalTestSet.Any(tc => tc.Row.RowIndex == row.RowIndex);
+                                    <tr class="@(isTestRow ? "table-warning" : "")">
+                                        <td>@row.RowIndex</td>
+                                        @foreach (var label in result.TruthTable.ConditionLabels)
+                                        {
+                                            <td class="text-center">
+                                                <span class="@(row.ConditionValues[label] ? "text-success fw-bold" : "text-danger")">
+                                                    @(row.ConditionValues[label] ? "T" : "F")
+                                                </span>
+                                            </td>
+                                        }
+                                        <td class="text-center">
+                                            <span class="@(row.DecisionOutcome ? "text-success fw-bold" : "text-danger")">
+                                                @(row.DecisionOutcome ? "T" : "F")
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                        @if (options.McdcCoverage)
+                        {
+                            <small class="text-muted">Highlighted rows are selected for the minimal MC/DC test set.</small>
+                        }
+                    </div>
+
+                    @if (options.McdcCoverage)
+                    {
+                        <!-- Independence Pairs (MC/DC only) -->
+                        <h6>Independence Pairs</h6>
+                        <div class="mb-3">
+                            @foreach (var label in result.TruthTable.ConditionLabels)
+                            {
+                                var pairs = result.IndependencePairs[label];
+                                <div class="mb-1">
+                                    <strong>@label</strong>: @pairs.Count pair(s)
+                                    @if (pairs.Count > 0)
+                                    {
+                                        <span class="text-muted ms-2">
+                                            @string.Join(", ", pairs.Select(p => $"({p.TrueRow.RowIndex},{p.FalseRow.RowIndex})"))
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-danger ms-2">No independence pairs found</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Minimal Test Set (MC/DC only) -->
+                        <h6>Minimal MC/DC Test Set (@result.MinimalTestSet.Count test cases)</h6>
+                        <div class="mb-3">
+                            <table class="table table-sm table-bordered" style="width: auto">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Row</th>
+                                        @foreach (var label in result.TruthTable.ConditionLabels)
+                                        {
+                                            <th class="text-center">@label</th>
+                                        }
+                                        <th class="text-center">Expected</th>
+                                        <th>Covers</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var tc in result.MinimalTestSet)
+                                    {
+                                        <tr>
+                                            <td>@tc.Row.RowIndex</td>
+                                            @foreach (var label in result.TruthTable.ConditionLabels)
+                                            {
+                                                <td class="text-center">
+                                                    <span class="@(tc.Row.ConditionValues[label] ? "text-success fw-bold" : "text-danger")">
+                                                        @(tc.Row.ConditionValues[label] ? "T" : "F")
+                                                    </span>
+                                                </td>
+                                            }
+                                            <td class="text-center">
+                                                <span class="@(tc.Row.DecisionOutcome ? "text-success fw-bold" : "text-danger")">
+                                                    @(tc.Row.DecisionOutcome ? "T" : "F")
+                                                </span>
+                                            </td>
+                                            <td>@string.Join(", ", tc.CoversConditions)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Generated Test Code (MC/DC only) -->
+                        <h6>Generated xUnit Test Code</h6>
+                        <div class="mb-3">
+                            <button class="btn btn-sm btn-outline-secondary mb-1" @onclick="() => CopyToClipboard(analysis.TestCode)">
+                                Copy to Clipboard
+                            </button>
+                            <pre class="border rounded p-3 bg-light" style="max-height: 400px; overflow-y: auto;"><code>@analysis.TestCode</code></pre>
                         </div>
                     }
                 </div>
-
-                <!-- Minimal Test Set -->
-                <h6>Minimal MC/DC Test Set (@result.MinimalTestSet.Count test cases)</h6>
-                <div class="mb-3">
-                    <table class="table table-sm table-bordered" style="width: auto">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Row</th>
-                                @foreach (var label in result.TruthTable.ConditionLabels)
-                                {
-                                    <th class="text-center">@label</th>
-                                }
-                                <th class="text-center">Expected</th>
-                                <th>Covers</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var tc in result.MinimalTestSet)
-                            {
-                                <tr>
-                                    <td>@tc.Row.RowIndex</td>
-                                    @foreach (var label in result.TruthTable.ConditionLabels)
-                                    {
-                                        <td class="text-center">
-                                            <span class="@(tc.Row.ConditionValues[label] ? "text-success fw-bold" : "text-danger")">
-                                                @(tc.Row.ConditionValues[label] ? "T" : "F")
-                                            </span>
-                                        </td>
-                                    }
-                                    <td class="text-center">
-                                        <span class="@(tc.Row.DecisionOutcome ? "text-success fw-bold" : "text-danger")">
-                                            @(tc.Row.DecisionOutcome ? "T" : "F")
-                                        </span>
-                                    </td>
-                                    <td>@string.Join(", ", tc.CoversConditions)</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Generated Test Code -->
-                <h6>Generated xUnit Test Code</h6>
-                <div class="mb-3">
-                    <button class="btn btn-sm btn-outline-secondary mb-1" @onclick="() => CopyToClipboard(analysis.TestCode)">
-                        Copy to Clipboard
-                    </button>
-                    <pre class="border rounded p-3 bg-light" style="max-height: 400px; overflow-y: auto;"><code>@analysis.TestCode</code></pre>
-                </div>
-            </div>
-        }
-    </div>
+            }
+        </div>
+    }
 }
 
 @code {
     private List<AnalysisResult>? results;
     private CoverageReport? coverageReport;
+    private CoverageOptions options = new();
     private HashSet<int> expandedCards = new();
     private bool showCoverageDetails;
 
@@ -346,6 +406,7 @@
     {
         results = Home.LastResults;
         coverageReport = Home.LastCoverageReport;
+        options = Home.LastCoverageOptions ?? new CoverageOptions { StatementCoverage = true, DecisionCoverage = true, McdcCoverage = true };
         // Auto-expand the first card
         if (results != null && results.Count > 0)
             expandedCards.Add(0);
@@ -421,11 +482,8 @@
         }
     }
 
-    private static string StatementProgressClass(double pct) =>
+    private static string ProgressClass(double pct) =>
         pct >= 80 ? "bg-success" : pct >= 50 ? "bg-warning" : "bg-danger";
-
-    private static string DecisionProgressClass(double pct) =>
-        pct >= 100 ? "bg-success" : pct >= 75 ? "bg-warning" : "bg-danger";
 
     private static string BadgeClass(double pct) =>
         pct >= 80 ? "bg-success" : pct >= 50 ? "bg-warning text-dark" : "bg-danger";
