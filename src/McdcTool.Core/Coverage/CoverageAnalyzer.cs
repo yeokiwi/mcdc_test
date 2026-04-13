@@ -56,6 +56,78 @@ public class CoverageAnalyzer
         return report;
     }
 
+    /// <summary>
+    /// Computes per-line coverage data for a single file, used by the visual coverage display.
+    /// </summary>
+    public FileCoverageDisplay AnalyzeLines(
+        string filePath,
+        List<AnalysisResultCoverage> analysisResults,
+        CoverageOptions options)
+    {
+        var display = new FileCoverageDisplay { FilePath = filePath };
+
+        if (!File.Exists(filePath))
+            return display;
+
+        var source = File.ReadAllText(filePath);
+        var sourceLines = source.Split('\n');
+        var tree = CSharpSyntaxTree.ParseText(source,
+            new CSharpParseOptions(LanguageVersion.Preview));
+        var root = tree.GetRoot();
+
+        // Decisions analyzed in this file
+        var decisionsInFile = analysisResults
+            .Where(r => string.Equals(r.Decision.FilePath, filePath, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // Build a set of decision line numbers and their coverage status
+        var decisionLines = new Dictionary<int, AnalysisResultCoverage>();
+        foreach (var d in decisionsInFile)
+            decisionLines.TryAdd(d.Decision.LineNumber, d);
+
+        // Walk the syntax tree to find executable statement lines and method spans
+        var lineWalker = new LineDetailWalker(tree);
+        lineWalker.Visit(root);
+
+        // Determine which methods are exercised (contain at least one analyzed decision)
+        var decisionLineNumbers = decisionsInFile.Select(r => r.Decision.LineNumber).ToHashSet();
+        var coveredMethods = lineWalker.GetCoveredMethodStartLines(decisionLineNumbers);
+
+        // Build per-line info
+        for (int i = 0; i < sourceLines.Length; i++)
+        {
+            int lineNum = i + 1; // 1-based
+            var lineText = sourceLines[i].TrimEnd('\r');
+
+            bool isStatement = lineWalker.StatementLines.Contains(lineNum);
+            bool isDecision = decisionLines.ContainsKey(lineNum);
+            bool stmtCovered = isStatement && lineWalker.IsLineInCoveredMethod(lineNum, coveredMethods);
+            bool decCovered = isDecision && decisionLines[lineNum].IsDecisionCovered;
+
+            // MC/DC covered: the decision has independence pairs for all conditions
+            bool mcdcCovered = false;
+            if (isDecision)
+            {
+                var result = decisionLines[lineNum].McResult;
+                mcdcCovered = result.IndependencePairs.All(kv => kv.Value.Count > 0)
+                    && result.MinimalTestSet.Count > 0;
+            }
+
+            display.Lines.Add(new LineCoverageInfo
+            {
+                LineNumber = lineNum,
+                SourceText = lineText,
+                IsExecutableStatement = isStatement,
+                IsDecisionLine = isDecision,
+                StatementCovered = stmtCovered,
+                DecisionCovered = decCovered,
+                McdcCovered = mcdcCovered
+            });
+        }
+
+        return display;
+    }
+
     private static bool IsDecisionCovered(McdcResult result)
     {
         return result.MinimalTestSet.Any(tc => tc.Row.DecisionOutcome)
@@ -71,6 +143,85 @@ public class AnalysisResultCoverage
     public required Parsing.DecisionInfo Decision { get; set; }
     public required McdcResult McResult { get; set; }
     public bool IsDecisionCovered { get; set; }
+}
+
+/// <summary>
+/// Walks the syntax tree to collect per-line statement data and method spans for the visual coverage display.
+/// </summary>
+internal class LineDetailWalker : CSharpSyntaxWalker
+{
+    private readonly SyntaxTree _tree;
+    public HashSet<int> StatementLines { get; } = new();
+    // Maps method start line → (startLine, endLine, set of statement lines)
+    private readonly List<(int StartLine, int EndLine, HashSet<int> StmtLines)> _methods = new();
+
+    public LineDetailWalker(SyntaxTree tree) : base(SyntaxWalkerDepth.Node)
+    {
+        _tree = tree;
+    }
+
+    public override void VisitBlock(BlockSyntax node)
+    {
+        base.VisitBlock(node);
+    }
+
+    public override void VisitMethodDeclaration(MethodDeclarationSyntax node) { RecordMethod(node); base.VisitMethodDeclaration(node); }
+    public override void VisitConstructorDeclaration(ConstructorDeclarationSyntax node) { RecordMethod(node); base.VisitConstructorDeclaration(node); }
+    public override void VisitDestructorDeclaration(DestructorDeclarationSyntax node) { RecordMethod(node); base.VisitDestructorDeclaration(node); }
+    public override void VisitOperatorDeclaration(OperatorDeclarationSyntax node) { RecordMethod(node); base.VisitOperatorDeclaration(node); }
+    public override void VisitAccessorDeclaration(AccessorDeclarationSyntax node) { RecordMethod(node); base.VisitAccessorDeclaration(node); }
+
+    private void RecordMethod(SyntaxNode node)
+    {
+        var span = node.GetLocation().GetLineSpan();
+        int start = span.StartLinePosition.Line + 1;
+        int end = span.EndLinePosition.Line + 1;
+        _methods.Add((start, end, new HashSet<int>()));
+    }
+
+    public override void DefaultVisit(SyntaxNode node)
+    {
+        if (node is StatementSyntax stmt && stmt is not BlockSyntax)
+        {
+            int line = stmt.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            StatementLines.Add(line);
+
+            // Associate with the tightest enclosing method
+            foreach (var m in _methods)
+            {
+                if (line >= m.StartLine && line <= m.EndLine)
+                    m.StmtLines.Add(line);
+            }
+        }
+        base.DefaultVisit(node);
+    }
+
+    /// <summary>
+    /// Returns start lines of methods that contain at least one decision line.
+    /// </summary>
+    public HashSet<int> GetCoveredMethodStartLines(HashSet<int> decisionLineNumbers)
+    {
+        var covered = new HashSet<int>();
+        foreach (var m in _methods)
+        {
+            if (decisionLineNumbers.Any(dl => dl >= m.StartLine && dl <= m.EndLine))
+                covered.Add(m.StartLine);
+        }
+        return covered;
+    }
+
+    /// <summary>
+    /// Checks if a given line belongs to a method that is in the covered set.
+    /// </summary>
+    public bool IsLineInCoveredMethod(int lineNumber, HashSet<int> coveredMethodStarts)
+    {
+        foreach (var m in _methods)
+        {
+            if (lineNumber >= m.StartLine && lineNumber <= m.EndLine && coveredMethodStarts.Contains(m.StartLine))
+                return true;
+        }
+        return false;
+    }
 }
 
 /// <summary>

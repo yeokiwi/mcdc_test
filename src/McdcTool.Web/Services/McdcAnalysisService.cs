@@ -84,6 +84,18 @@ public class McdcAnalysisService
         return new CoverageAnalyzer().Analyze(filePaths, coverageItems);
     }
 
+    public FileCoverageDisplay ComputeLineCoverage(string filePath, List<AnalysisResult> results, CoverageOptions options)
+    {
+        var coverageItems = results.Select(r => new AnalysisResultCoverage
+        {
+            Decision = r.Decision,
+            McResult = r.Result,
+            IsDecisionCovered = r.IsDecisionCovered
+        }).ToList();
+
+        return new CoverageAnalyzer().AnalyzeLines(filePath, coverageItems, options);
+    }
+
     public void GenerateTestProject(List<string> sourceFiles, List<AnalysisResult> results, string outputDir)
     {
         var items = results

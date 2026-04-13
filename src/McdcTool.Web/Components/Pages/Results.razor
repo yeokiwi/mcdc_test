@@ -20,6 +20,7 @@
     <h3>Coverage Analysis Results</h3>
     <div>
         <button class="btn btn-outline-primary me-2" @onclick="GoBack">Back to File Selection</button>
+        <button class="btn btn-outline-info me-2" @onclick="ViewSourceCoverage">View Source Coverage</button>
         @if (options.McdcCoverage)
         {
             <button class="btn btn-outline-success me-2" @onclick="ShowProjectDialog">Generate Test Project</button>
@@ -421,6 +422,11 @@
     private void GoBack()
     {
         Navigation.NavigateTo("/");
+    }
+
+    private void ViewSourceCoverage()
+    {
+        Navigation.NavigateTo("/coverage");
     }
 
     private void ShowExportDialog()

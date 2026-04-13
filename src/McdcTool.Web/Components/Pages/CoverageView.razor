@@ -1,0 +1,186 @@
+@page "/coverage"
+@using McdcTool.Core.Models
+@using McdcTool.Web.Services
+@inject McdcAnalysisService AnalysisService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Source Coverage View</PageTitle>
+
+@if (analyzedFiles == null || analyzedFiles.Count == 0)
+{
+    <div class="alert alert-warning">
+        No analysis results available. <a href="/">Go back to file selection</a>.
+    </div>
+    return;
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Source Coverage View</h3>
+    <div>
+        <button class="btn btn-outline-primary" @onclick="GoBack">Back to Results</button>
+    </div>
+</div>
+
+<!-- File selector -->
+<div class="row mb-3">
+    <div class="col-md-6">
+        <label class="form-label fw-bold">Select file:</label>
+        <select class="form-select" @onchange="OnFileSelected">
+            <option value="">-- Choose a file --</option>
+            @foreach (var file in analyzedFiles)
+            {
+                <option value="@file" selected="@(file == selectedFile)">@Path.GetFileName(file)</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-6 d-flex align-items-end">
+        <div>
+            @if (options.StatementCoverage)
+            {
+                <span class="badge bg-success me-1">S = Statement Covered</span>
+                <span class="badge bg-danger me-1">S = Statement Uncovered</span>
+            }
+            @if (options.DecisionCoverage)
+            {
+                <span class="badge bg-success me-1">D = Decision Covered</span>
+                <span class="badge bg-danger me-1">D = Decision Uncovered</span>
+            }
+            @if (options.McdcCoverage)
+            {
+                <span class="badge bg-success me-1">M = MC/DC Covered</span>
+                <span class="badge bg-danger me-1">M = MC/DC Uncovered</span>
+            }
+        </div>
+    </div>
+</div>
+
+@if (fileCoverage != null)
+{
+    <!-- Coverage legend -->
+    <div class="mb-2 small text-muted">
+        <span class="d-inline-block px-2 me-2" style="background-color: #fdd;">Uncovered code</span>
+        <span class="d-inline-block px-2 me-2" style="background-color: #dfd;">Covered code</span>
+        <span class="d-inline-block px-2 me-2" style="background-color: transparent;">Non-executable</span>
+    </div>
+
+    <div class="border rounded" style="overflow-x: auto;">
+        <table class="coverage-table" style="width: 100%; border-collapse: collapse; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px;">
+            <thead>
+                <tr style="background: #f1f1f1; border-bottom: 2px solid #ccc;">
+                    <th style="width: 50px; padding: 4px 8px; text-align: right; color: #888;">Line</th>
+                    <th style="padding: 4px 12px;">Source</th>
+                    <th style="width: 120px; padding: 4px 8px; text-align: center;">Coverage</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in fileCoverage.Lines)
+                {
+                    var bgColor = GetLineBackground(line);
+                    <tr style="background-color: @bgColor; border-bottom: 1px solid #eee;">
+                        <td style="padding: 1px 8px; text-align: right; color: #888; user-select: none; border-right: 1px solid #ddd;">
+                            @line.LineNumber
+                        </td>
+                        <td style="padding: 1px 12px; white-space: pre;">@line.SourceText</td>
+                        <td style="padding: 1px 8px; text-align: center;">
+                            @if (options.StatementCoverage && line.IsExecutableStatement)
+                            {
+                                <span class="badge @(line.StatementCovered ? "bg-success" : "bg-danger")" style="font-size: 10px;">S</span>
+                            }
+                            @if (options.DecisionCoverage && line.IsDecisionLine)
+                            {
+                                <span class="badge @(line.DecisionCovered ? "bg-success" : "bg-danger")" style="font-size: 10px;">D</span>
+                            }
+                            @if (options.McdcCoverage && line.IsDecisionLine)
+                            {
+                                <span class="badge @(line.McdcCovered ? "bg-success" : "bg-danger")" style="font-size: 10px;">M</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+else if (!string.IsNullOrEmpty(selectedFile))
+{
+    <div class="text-center py-4">
+        <span class="spinner-border spinner-border-sm"></span> Loading...
+    </div>
+}
+
+@code {
+    private List<string>? analyzedFiles;
+    private List<AnalysisResult>? results;
+    private CoverageOptions options = new();
+    private string selectedFile = "";
+    private FileCoverageDisplay? fileCoverage;
+
+    protected override void OnInitialized()
+    {
+        results = Home.LastResults ?? new();
+        options = Home.LastCoverageOptions ?? new CoverageOptions { StatementCoverage = true, DecisionCoverage = true, McdcCoverage = true };
+
+        // Collect distinct file paths from analysis results and analyzed files list
+        var fileSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (Home.LastAnalyzedFiles != null)
+            foreach (var f in Home.LastAnalyzedFiles) fileSet.Add(f);
+        if (results != null)
+            foreach (var r in results) fileSet.Add(r.Decision.FilePath);
+        analyzedFiles = fileSet.OrderBy(f => Path.GetFileName(f)).ToList();
+
+        // Auto-select the first file
+        if (analyzedFiles.Count > 0)
+        {
+            selectedFile = analyzedFiles[0];
+            ComputeCoverage();
+        }
+    }
+
+    private void OnFileSelected(ChangeEventArgs e)
+    {
+        selectedFile = e.Value?.ToString() ?? "";
+        if (!string.IsNullOrEmpty(selectedFile))
+            ComputeCoverage();
+        else
+            fileCoverage = null;
+    }
+
+    private void ComputeCoverage()
+    {
+        fileCoverage = AnalysisService.ComputeLineCoverage(selectedFile, results ?? new(), options);
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/results");
+    }
+
+    private string GetLineBackground(LineCoverageInfo line)
+    {
+        // Check if this line has any applicable coverage that is NOT satisfied
+        bool hasApplicableCoverage = false;
+        bool allCovered = true;
+
+        if (options.StatementCoverage && line.IsExecutableStatement)
+        {
+            hasApplicableCoverage = true;
+            if (!line.StatementCovered) allCovered = false;
+        }
+        if (options.DecisionCoverage && line.IsDecisionLine)
+        {
+            hasApplicableCoverage = true;
+            if (!line.DecisionCovered) allCovered = false;
+        }
+        if (options.McdcCoverage && line.IsDecisionLine)
+        {
+            hasApplicableCoverage = true;
+            if (!line.McdcCovered) allCovered = false;
+        }
+
+        if (!hasApplicableCoverage)
+            return "transparent"; // non-executable line
+
+        return allCovered ? "#dfd" : "#fdd"; // green if all covered, red if any uncovered
+    }
+}
