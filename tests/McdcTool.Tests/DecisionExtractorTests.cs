@@ -141,4 +141,47 @@ class C {
         Assert.Single(decisions);
         Assert.Equal(3, decisions[0].LineNumber);
     }
+
+    [Fact]
+    public void Extract_ForLoopWithoutCondition_DoesNotCrash()
+    {
+        var code = @"
+class C {
+    void M() {
+        for (;;) { break; }
+    }
+}";
+        var decisions = _extractor.Extract("test.cs", code);
+
+        Assert.Empty(decisions);
+    }
+
+    [Fact]
+    public void Extract_NotWrappingCompound_FindsDecision()
+    {
+        var code = @"
+class C {
+    void M(bool a, bool b) {
+        if (!(a && b)) { }
+    }
+}";
+        var decisions = _extractor.Extract("test.cs", code);
+
+        Assert.Single(decisions);
+        Assert.Equal("if", decisions[0].StatementType);
+    }
+
+    [Fact]
+    public void Extract_ParenthesizedCompound_FindsDecision()
+    {
+        var code = @"
+class C {
+    void M(bool a, bool b) {
+        if ((a || b)) { }
+    }
+}";
+        var decisions = _extractor.Extract("test.cs", code);
+
+        Assert.Single(decisions);
+    }
 }

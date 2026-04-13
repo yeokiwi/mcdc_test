@@ -128,11 +128,6 @@ public class CoverageAnalyzer
         return display;
     }
 
-    private static bool IsDecisionCovered(McdcResult result)
-    {
-        return result.MinimalTestSet.Any(tc => tc.Row.DecisionOutcome)
-            && result.MinimalTestSet.Any(tc => !tc.Row.DecisionOutcome);
-    }
 }
 
 /// <summary>

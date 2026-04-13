@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\McdcTool.Core\McdcTool.Core.csproj" />
+    <ProjectReference Include="..\..\src\McdcTool.Web\McdcTool.Web.csproj" />
   </ItemGroup>
 
 </Project>
